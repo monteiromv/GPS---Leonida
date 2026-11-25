@@ -52,6 +52,13 @@ window.LEONIDA_I18N = {
     authCopied: 'Copiado!',
     authRecoverInvalid: 'Usuário ou código de recuperação inválido.',
     authMasterTitle: 'Contas Criadas',
+    achTitle: 'Conquistas',
+    achTabAll: 'Todas',
+    achTabPending: 'Pendentes',
+    achTabDone: 'Feitas',
+    achMissable: 'Perdível',
+    achEarned: 'Conquistados',
+    achAvailable: 'Disponíveis',
     cats: {}
   },
   EN: {
@@ -107,6 +114,13 @@ window.LEONIDA_I18N = {
     authCopied: 'Copied!',
     authRecoverInvalid: 'Invalid username or recovery code.',
     authMasterTitle: 'Created Accounts',
+    achTitle: 'Achievements',
+    achTabAll: 'All',
+    achTabPending: 'Pending',
+    achTabDone: 'Unlocked',
+    achMissable: 'Missable',
+    achEarned: 'Earned',
+    achAvailable: 'Available',
     cats: {
       cat_collectibles: 'Collectibles',
       cards: 'Trading Cards',
@@ -203,6 +217,8 @@ window.LEONIDA_I18N = {
     authImport: 'Importar Respaldo',
     authLogout: 'Cerrar sesión',
     authWrongPass: 'Contraseña incorrecta para este usuario.',
+    achEarned: 'Obtenidos',
+    achAvailable: 'Disponibles',
     cats: {
       cat_collectibles: 'Coleccionables',
       cards: 'Cartas coleccionables',
@@ -299,6 +315,8 @@ window.LEONIDA_I18N = {
     authImport: 'Importer',
     authLogout: 'Se déconnecter',
     authWrongPass: 'Mot de passe incorrect pour cet utilisateur.',
+    achEarned: 'Obtenus',
+    achAvailable: 'Disponibles',
     cats: {
       cat_collectibles: 'Objets à collecter',
       cards: 'Cartes à collectionner',

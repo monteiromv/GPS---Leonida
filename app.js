@@ -125,6 +125,7 @@
   // Persistent state
   const STORAGE_FOUND = 'leonidaverse_clone_found_v1';
   const STORAGE_CUSTOM = 'leonidaverse_clone_custom_v1';
+  const STORAGE_ACHIEVEMENTS = 'leonida_achievements_v1';
   const STORAGE_THEME = 'leonida-theme';
   const STORAGE_LANG = 'leonida-lang';
   const STORAGE_USERS = 'leonida_users_v1';
@@ -155,16 +156,19 @@
   if (activeUser) activeUser = activeUser.toLowerCase();
   let foundSet = new Set();
   let customPois = [];
+  let achievementsSet = new Set();
 
   function loadActiveProgress() {
     const users = getUsersMap();
     if (activeUser && users[activeUser]) {
       foundSet = new Set(users[activeUser].found || []);
       customPois = users[activeUser].customPois || [];
+      achievementsSet = new Set(users[activeUser].achievements || []);
     } else {
       activeUser = null;
       foundSet = new Set(JSON.parse(localStorage.getItem(STORAGE_FOUND) || '[]'));
       customPois = JSON.parse(localStorage.getItem(STORAGE_CUSTOM) || '[]');
+      achievementsSet = new Set(JSON.parse(localStorage.getItem(STORAGE_ACHIEVEMENTS) || '[]'));
     }
   }
 
@@ -174,12 +178,14 @@
       if (users[activeUser]) {
         users[activeUser].found = [...foundSet];
         users[activeUser].customPois = customPois;
+        users[activeUser].achievements = [...achievementsSet];
         saveUsersMap(users);
         return;
       }
     }
     localStorage.setItem(STORAGE_FOUND, JSON.stringify([...foundSet]));
     localStorage.setItem(STORAGE_CUSTOM, JSON.stringify(customPois));
+    localStorage.setItem(STORAGE_ACHIEVEMENTS, JSON.stringify([...achievementsSet]));
   }
 
   loadActiveProgress();
@@ -240,7 +246,8 @@
     maxZoom: 7.32,
     bounds: mapBounds,
     noWrap: true,
-    keepBuffer: 4,
+    keepBuffer: 2,
+    updateWhenIdle: true,
     zIndex: 2
   }).addTo(map);
 
@@ -271,7 +278,16 @@
     coordsReadout.textContent = `X: ${w.x} · Y: ${w.y}`;
   });
 
-  map.on('moveend zoomend', () => renderMarkers());
+  let renderRafId = null;
+  function scheduleRenderMarkers() {
+    if (renderRafId) cancelAnimationFrame(renderRafId);
+    renderRafId = requestAnimationFrame(() => {
+      renderRafId = null;
+      renderMarkers();
+    });
+  }
+
+  map.on('moveend zoomend', scheduleRenderMarkers);
 
   map.on('click', e => {
     if (!state.addPinMode) return;
@@ -302,8 +318,10 @@
   document.getElementById('zoomInBtn').addEventListener('click', () => map.zoomIn(0.5));
   document.getElementById('zoomOutBtn').addEventListener('click', () => map.zoomOut(0.5));
   document.getElementById('resetViewBtn').addEventListener('click', () => resetView(true));
+  const mapWorkspace = document.querySelector('.map-workspace');
   document.getElementById('fullscreenBtn').addEventListener('click', () => {
     mapViewport.classList.toggle('is-fullscreen');
+    if (mapWorkspace) mapWorkspace.classList.toggle('is-fullscreen');
     setTimeout(() => map.invalidateSize(), 80);
   });
 
@@ -497,6 +515,23 @@
     });
   }
 
+  // Pre-compute LatLngs and reuse marker instances across pan/zoom
+  DATA.pois.forEach(p => { p._ll = worldToLatLng(p.x, p.y); });
+  const markerPool = new Map();
+  const activeMarkers = new Set();
+
+  function buildMarkerIcon(p, isFound, isSelected) {
+    const cat = catById.get(p.subcategory) || catById.get(p.category);
+    const color = p.custom ? '#ff3b8e' : catColor(cat);
+    const icon = p.custom ? 'star' : catIconName(cat);
+    return L.divIcon({
+      className: 'poi-marker-wrap',
+      iconSize: [26, 26],
+      iconAnchor: [13, 13],
+      html: `<div class="poi-marker${isFound ? ' is-found' : ''}${isSelected ? ' is-selected' : ''}" style="background-color:${color}" title="${p.title.replace(/"/g, '&quot;')}">${iconSvg(icon)}</div>`
+    });
+  }
+
   function renderMarkers() {
     if (!map._loaded) return;
     const filtered = getFilteredPois();
@@ -504,34 +539,51 @@
     foundCountLabel.textContent = `${foundSet.size.toLocaleString('pt-BR')} ${t('foundLabel')}`;
 
     const viewBounds = map.getBounds().pad(0.15);
-    const inView = filtered.filter(p => viewBounds.contains(worldToLatLng(p.x, p.y)));
+    const inView = filtered.filter(p => {
+      if (!p._ll) p._ll = worldToLatLng(p.x, p.y);
+      return viewBounds.contains(p._ll);
+    });
 
     // Keep DOM responsive at low zoom
     const zoom = map.getZoom();
     let toRender = inView;
-    if (zoom < 3.5 && inView.length > 350) {
-      const step = Math.ceil(inView.length / 350);
+    if (zoom < 3.5 && inView.length > 320) {
+      const step = Math.ceil(inView.length / 320);
       toRender = inView.filter((_, idx) => idx % step === 0);
     }
 
-    markersLayer.clearLayers();
+    const nextSlugs = new Set(toRender.map(p => p.slug));
+
+    // Remove markers that left view or filter
+    activeMarkers.forEach(slug => {
+      if (!nextSlugs.has(slug)) {
+        const entry = markerPool.get(slug);
+        if (entry) markersLayer.removeLayer(entry.marker);
+        activeMarkers.delete(slug);
+      }
+    });
+
+    // Add or update only changed markers
     toRender.forEach(p => {
-      const cat = catById.get(p.subcategory) || catById.get(p.category);
-      const color = p.custom ? '#ff3b8e' : catColor(cat);
-      const icon = p.custom ? 'star' : catIconName(cat);
       const isFound = foundSet.has(p.slug);
-      const isSelected = state.selectedPoi && state.selectedPoi.slug === p.slug;
+      const isSelected = Boolean(state.selectedPoi && state.selectedPoi.slug === p.slug);
+      let entry = markerPool.get(p.slug);
 
-      const divIcon = L.divIcon({
-        className: 'poi-marker-wrap',
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
-        html: `<div class="poi-marker${isFound ? ' is-found' : ''}${isSelected ? ' is-selected' : ''}" style="background-color:${color}" title="${p.title.replace(/"/g, '&quot;')}">${iconSvg(icon)}</div>`
-      });
+      if (!entry) {
+        const marker = L.marker(p._ll, { icon: buildMarkerIcon(p, isFound, isSelected) });
+        marker.on('click', () => openPoiPopup(p));
+        entry = { marker, isFound, isSelected };
+        markerPool.set(p.slug, entry);
+      } else if (entry.isFound !== isFound || entry.isSelected !== isSelected) {
+        entry.marker.setIcon(buildMarkerIcon(p, isFound, isSelected));
+        entry.isFound = isFound;
+        entry.isSelected = isSelected;
+      }
 
-      const marker = L.marker(worldToLatLng(p.x, p.y), { icon: divIcon });
-      marker.on('click', () => openPoiPopup(p));
-      marker.addTo(markersLayer);
+      if (!activeMarkers.has(p.slug)) {
+        entry.marker.addTo(markersLayer);
+        activeMarkers.add(p.slug);
+      }
     });
   }
 
@@ -788,6 +840,7 @@
 
     renderFilters();
     renderMarkers();
+    renderAchievements();
     if (state.selectedPoi) {
       openPoiPopup(state.selectedPoi);
     }
@@ -1086,11 +1139,110 @@
     });
   }
 
+  // --- GTA 6 Achievements Panel ---
+  const ACHIEVEMENTS = window.LEONIDA_ACHIEVEMENTS || [];
+  const achListEl = document.getElementById('achList');
+  const achCountBadge = document.getElementById('achCountBadge');
+  const achEarnedCountEl = document.getElementById('achEarnedCount');
+  const achTotalCountEl = document.getElementById('achTotalCount');
+  const achPctTextEl = document.getElementById('achPctText');
+  const achRingFillEl = document.getElementById('achRingFill');
+  const achCountPlatEl = document.getElementById('achCountPlatinum');
+  const achCountGoldEl = document.getElementById('achCountGold');
+  const achCountSilverEl = document.getElementById('achCountSilver');
+  const achCountBronzeEl = document.getElementById('achCountBronze');
+  let achFilter = 'all';
+
+  const TIER_LABELS_I18N = {
+    PT: { platinum: 'Platina', gold: 'Ouro', silver: 'Prata', bronze: 'Bronze' },
+    EN: { platinum: 'Platinum', gold: 'Gold', silver: 'Silver', bronze: 'Bronze' },
+    ES: { platinum: 'Platino', gold: 'Oro', silver: 'Plata', bronze: 'Bronce' },
+    FR: { platinum: 'Platine', gold: 'Or', silver: 'Argent', bronze: 'Bronze' }
+  };
+
+  function achText(a) {
+    if (currentLang === 'EN') return { title: a.title, desc: a.descEn || a.desc };
+    if (currentLang === 'ES') return { title: a.titleEs || a.title, desc: a.descEs || a.desc };
+    if (currentLang === 'FR') return { title: a.titleFr || a.title, desc: a.descFr || a.desc };
+    return { title: a.titlePt || a.title, desc: a.desc };
+  }
+
+  function renderAchievements() {
+    if (!achListEl) return;
+    const total = ACHIEVEMENTS.length;
+    const unlockedList = ACHIEVEMENTS.filter(a => achievementsSet.has(a.id));
+    const unlocked = unlockedList.length;
+    const pct = total ? Math.round((unlocked / total) * 100) : 0;
+    if (achCountBadge) achCountBadge.textContent = `${unlocked}/${total}`;
+    if (achEarnedCountEl) achEarnedCountEl.textContent = String(unlocked);
+    if (achTotalCountEl) achTotalCountEl.textContent = String(total);
+    if (achPctTextEl) achPctTextEl.textContent = `${pct}%`;
+    if (achRingFillEl) {
+      const circ = 169.65;
+      achRingFillEl.style.strokeDashoffset = (circ * (1 - pct / 100)).toFixed(2);
+    }
+    const counts = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
+    unlockedList.forEach(a => { if (counts[a.tier] !== undefined) counts[a.tier]++; });
+    if (achCountPlatEl) achCountPlatEl.textContent = String(counts.platinum);
+    if (achCountGoldEl) achCountGoldEl.textContent = String(counts.gold);
+    if (achCountSilverEl) achCountSilverEl.textContent = String(counts.silver);
+    if (achCountBronzeEl) achCountBronzeEl.textContent = String(counts.bronze);
+
+    const tiers = TIER_LABELS_I18N[currentLang] || TIER_LABELS_I18N.PT;
+    const visible = ACHIEVEMENTS.filter(a => {
+      const isDone = achievementsSet.has(a.id);
+      if (achFilter === 'done') return isDone;
+      if (achFilter === 'pending') return !isDone;
+      return true;
+    });
+
+    achListEl.innerHTML = '';
+    visible.forEach(a => {
+      const isDone = achievementsSet.has(a.id);
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'ach-row' + (isDone ? ' unlocked' : '');
+      const { title, desc } = achText(a);
+      row.innerHTML = `
+        <div class="ach-info">
+          <div class="ach-title-line">
+            <span class="ach-tier ach-tier--${a.tier}" title="${tiers[a.tier] || a.tier}" aria-label="${tiers[a.tier] || a.tier}"><svg class="ach-trophy-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg></span>
+            ${a.missable ? `<span class="ach-missable">${t('achMissable')}</span>` : ''}
+            <span class="ach-name">${title}</span>
+          </div>
+          <p class="ach-desc">${desc}</p>
+        </div>
+        <span class="ach-check" aria-hidden="true">
+          ${isDone ? '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+        </span>
+      `;
+      row.addEventListener('click', () => {
+        if (achievementsSet.has(a.id)) {
+          achievementsSet.delete(a.id);
+        } else {
+          achievementsSet.add(a.id);
+        }
+        saveActiveProgress();
+        renderAchievements();
+      });
+      achListEl.appendChild(row);
+    });
+  }
+
+  document.querySelectorAll('[data-ach-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      achFilter = btn.getAttribute('data-ach-filter');
+      document.querySelectorAll('[data-ach-filter]').forEach(b => b.classList.toggle('active', b === btn));
+      renderAchievements();
+    });
+  });
+
   // --- Init ---
   window.addEventListener('resize', () => map.invalidateSize());
   resetView(false);
   updateAuthUI();
   applyLanguage(currentLang);
+  renderAchievements();
   renderRegionPolygons();
   renderHub();
   renderMarkers();

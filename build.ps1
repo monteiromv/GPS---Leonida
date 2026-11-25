@@ -13,6 +13,7 @@ $prodFiles = @(
   "index.html",
   "styles.css",
   "app.js",
+  "achievements.js",
   "i18n.js",
   "map-data-pt.js",
   "favicon.svg",
