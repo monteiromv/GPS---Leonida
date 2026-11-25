@@ -17,7 +17,9 @@ $prodFiles = @(
   "map-data-pt.js",
   "favicon.svg",
   "logo-monteiromv.jpg",
-  "map-poster.webp"
+  "map-poster.webp",
+  "robots.txt",
+  "sitemap.xml"
 )
 
 Write-Host "==> Copying production assets..."
