@@ -41,7 +41,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Pacifico&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="styles.css?v=20261125g" />
+  <link rel="stylesheet" href="styles.css?v=20261125h" />
 </head>
 <body>
   <!-- Fixed Header -->
@@ -273,6 +273,29 @@
         <div class="auth-actions-row">
           <button type="submit" id="authSubmitBtn" class="btn-primary" data-i18n="authSubmitBtn">Entrar / Criar Conta</button>
         </div>
+        <button type="button" id="authForgotBtn" class="auth-link-btn" data-i18n="authForgotBtn">Esqueci minha senha</button>
+      </form>
+
+      <!-- Forgot Password / Recovery Form -->
+      <form id="authRecoverForm" class="auth-form" hidden>
+        <p class="auth-hint" data-i18n="authRecoverHint">Digite seu usuário e o código de recuperação (ex: LEONIDA-XXXX) para definir uma nova senha.</p>
+        <label class="auth-field">
+          <span data-i18n="authUserLabel">Usuário</span>
+          <input id="recoverUsername" type="text" required minlength="2" maxlength="24" placeholder="Ex: MonteiroMV" />
+        </label>
+        <label class="auth-field">
+          <span data-i18n="authRecoverCodeLabel">Código de Recuperação</span>
+          <input id="recoverCode" type="text" required minlength="6" maxlength="20" placeholder="LEONIDA-XXXX" style="text-transform:uppercase;" />
+        </label>
+        <label class="auth-field">
+          <span data-i18n="authNewPassLabel">Nova Senha</span>
+          <input id="recoverNewPass" type="password" required minlength="3" maxlength="64" placeholder="••••••" />
+        </label>
+        <p id="recoverMsg" class="auth-error" hidden></p>
+        <div class="auth-actions-row">
+          <button type="submit" class="btn-primary" data-i18n="authRecoverSubmit">Redefinir Senha</button>
+        </div>
+        <button type="button" id="authBackLoginBtn" class="auth-link-btn" data-i18n="authBackLogin">← Voltar ao login</button>
       </form>
 
       <!-- Logged In Profile View -->
@@ -286,6 +309,13 @@
         </div>
         <div class="auth-progress-bar">
           <div id="authProgressFill" class="auth-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="auth-recovery-box">
+          <div>
+            <div class="auth-recovery-label" data-i18n="authRecoverCodeLabel">Código de Recuperação</div>
+            <code id="authProfileRecoveryCode" class="auth-recovery-code">LEONIDA-XXXX</code>
+          </div>
+          <button id="copyRecoveryBtn" type="button" class="mini-link-btn" data-i18n="authCopyCode">Copiar</button>
         </div>
         <div class="auth-backup-row">
           <button id="exportSaveBtn" type="button" class="btn-secondary" data-i18n="authExport">Exportar Backup (.json)</button>
@@ -309,8 +339,8 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="map-data-pt.js?v=20261125g"></script>
-  <script src="i18n.js?v=20261125g"></script>
-  <script src="app.js?v=20261125g"></script>
+  <script src="map-data-pt.js?v=20261125h"></script>
+  <script src="i18n.js?v=20261125h"></script>
+  <script src="app.js?v=20261125h"></script>
 </body>
 </html>

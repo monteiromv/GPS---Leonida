@@ -824,6 +824,22 @@
   const importSaveInput = document.getElementById('importSaveInput');
   const authMasterPanel = document.getElementById('authMasterPanel');
   const authMasterList = document.getElementById('authMasterList');
+  const authForgotBtn = document.getElementById('authForgotBtn');
+  const authRecoverForm = document.getElementById('authRecoverForm');
+  const authBackLoginBtn = document.getElementById('authBackLoginBtn');
+  const recoverUsername = document.getElementById('recoverUsername');
+  const recoverCode = document.getElementById('recoverCode');
+  const recoverNewPass = document.getElementById('recoverNewPass');
+  const recoverMsg = document.getElementById('recoverMsg');
+  const authProfileRecoveryCode = document.getElementById('authProfileRecoveryCode');
+  const copyRecoveryBtn = document.getElementById('copyRecoveryBtn');
+
+  function generateRecoveryCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let suffix = '';
+    for (let i = 0; i < 4; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+    return `LEONIDA-${suffix}`;
+  }
 
   function renderMasterPanel() {
     if (!authMasterPanel || !authMasterList) return;
@@ -883,14 +899,21 @@
     const users = getUsersMap();
     const profile = activeUser && users[activeUser];
     if (activeUser && profile) {
+      if (!profile.recoveryCode) {
+        profile.recoveryCode = generateRecoveryCode();
+        users[activeUser] = profile;
+        saveUsersMap(users);
+      }
       const displayName = profile.displayName || activeUser;
       authOpenBtn.classList.add('logged-in');
       authNavLabel.removeAttribute('data-i18n');
       authNavLabel.textContent = displayName;
       if (authForm) authForm.hidden = true;
+      if (authRecoverForm) authRecoverForm.hidden = true;
       if (authProfileView) authProfileView.hidden = false;
       if (authProfileAvatar) authProfileAvatar.textContent = displayName.charAt(0).toUpperCase();
       if (authProfileName) authProfileName.textContent = displayName;
+      if (authProfileRecoveryCode) authProfileRecoveryCode.textContent = profile.recoveryCode;
       const total = DATA.pois.length;
       const count = foundSet.size;
       const pct = total ? Math.min(100, Math.round((count / total) * 100)) : 0;
@@ -902,6 +925,7 @@
       authNavLabel.setAttribute('data-i18n', 'authLoginBtn');
       authNavLabel.textContent = t('authLoginBtn');
       if (authForm) authForm.hidden = false;
+      if (authRecoverForm) authRecoverForm.hidden = true;
       if (authProfileView) authProfileView.hidden = true;
       if (authMasterPanel) authMasterPanel.hidden = true;
     }
@@ -939,6 +963,7 @@
         users[key] = {
           displayName: username,
           passHash,
+          recoveryCode: generateRecoveryCode(),
           found: isFirstAccount ? [...foundSet] : [],
           customPois: isFirstAccount ? customPois : []
         };
@@ -969,6 +994,54 @@
       renderMarkers();
       if (state.selectedPoi) openPoiPopup(state.selectedPoi);
     });
+
+    if (authForgotBtn && authRecoverForm && authBackLoginBtn) {
+      authForgotBtn.addEventListener('click', () => {
+        authForm.hidden = true;
+        authRecoverForm.hidden = false;
+        if (recoverMsg) recoverMsg.hidden = true;
+        if (recoverUsername && authUsername.value) recoverUsername.value = authUsername.value;
+      });
+
+      authBackLoginBtn.addEventListener('click', () => {
+        authRecoverForm.hidden = true;
+        authForm.hidden = false;
+        if (authErrorMsg) authErrorMsg.hidden = true;
+      });
+
+      authRecoverForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const key = recoverUsername.value.trim().toLowerCase();
+        const code = recoverCode.value.trim().toUpperCase();
+        const newPass = recoverNewPass.value;
+        const users = getUsersMap();
+        if (!users[key] || !users[key].recoveryCode || users[key].recoveryCode.toUpperCase() !== code) {
+          recoverMsg.textContent = t('authRecoverInvalid');
+          recoverMsg.hidden = false;
+          return;
+        }
+        users[key].passHash = await hashPass(newPass);
+        saveUsersMap(users);
+        activeUser = key;
+        localStorage.setItem(STORAGE_SESSION, activeUser);
+        loadActiveProgress();
+        recoverCode.value = '';
+        recoverNewPass.value = '';
+        recoverMsg.hidden = true;
+        updateAuthUI();
+        renderFilters();
+        renderMarkers();
+        if (state.selectedPoi) openPoiPopup(state.selectedPoi);
+      });
+    }
+
+    if (copyRecoveryBtn && authProfileRecoveryCode) {
+      copyRecoveryBtn.addEventListener('click', () => {
+        navigator.clipboard?.writeText(authProfileRecoveryCode.textContent);
+        copyRecoveryBtn.textContent = t('authCopied');
+        setTimeout(() => { copyRecoveryBtn.textContent = t('authCopyCode'); }, 1600);
+      });
+    }
 
     exportSaveBtn.addEventListener('click', () => {
       const payload = {
