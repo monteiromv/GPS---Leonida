@@ -76,6 +76,12 @@
     return cat.icon || fallback || 'map-pin';
   }
 
+  function catColor(cat, fallback) {
+    if (!cat) return fallback || '#3b82f6';
+    if (cat.id === 176 || cat.parent === 176) return '#06b6d4';
+    return cat.color || fallback || '#3b82f6';
+  }
+
   function iconSvg(name) {
     const path = ICONS[name] || ICONS['map-pin'];
     return `<svg viewBox="0 0 24 24">${path}</svg>`;
@@ -121,6 +127,8 @@
   const STORAGE_CUSTOM = 'leonidaverse_clone_custom_v1';
   const STORAGE_THEME = 'leonida-theme';
   const STORAGE_LANG = 'leonida-lang';
+  const STORAGE_USERS = 'leonida_users_v1';
+  const STORAGE_SESSION = 'leonida_active_user_v1';
 
   const I18N = window.LEONIDA_I18N || {};
   let currentLang = localStorage.getItem(STORAGE_LANG) || 'PT';
@@ -136,8 +144,44 @@
     return translated || cat.name;
   }
 
-  let foundSet = new Set(JSON.parse(localStorage.getItem(STORAGE_FOUND) || '[]'));
-  let customPois = JSON.parse(localStorage.getItem(STORAGE_CUSTOM) || '[]');
+  function getUsersMap() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_USERS) || '{}'); } catch { return {}; }
+  }
+  function saveUsersMap(users) {
+    localStorage.setItem(STORAGE_USERS, JSON.stringify(users));
+  }
+
+  let activeUser = localStorage.getItem(STORAGE_SESSION) || null;
+  let foundSet = new Set();
+  let customPois = [];
+
+  function loadActiveProgress() {
+    const users = getUsersMap();
+    if (activeUser && users[activeUser]) {
+      foundSet = new Set(users[activeUser].found || []);
+      customPois = users[activeUser].customPois || [];
+    } else {
+      activeUser = null;
+      foundSet = new Set(JSON.parse(localStorage.getItem(STORAGE_FOUND) || '[]'));
+      customPois = JSON.parse(localStorage.getItem(STORAGE_CUSTOM) || '[]');
+    }
+  }
+
+  function saveActiveProgress() {
+    if (activeUser) {
+      const users = getUsersMap();
+      if (users[activeUser]) {
+        users[activeUser].found = [...foundSet];
+        users[activeUser].customPois = customPois;
+        saveUsersMap(users);
+        return;
+      }
+    }
+    localStorage.setItem(STORAGE_FOUND, JSON.stringify([...foundSet]));
+    localStorage.setItem(STORAGE_CUSTOM, JSON.stringify(customPois));
+  }
+
+  loadActiveProgress();
 
   const state = {
     activeSubcategories: new Set(),
@@ -351,7 +395,7 @@
           sRow.className = 'subcat-row' + (isSubOn ? ' active' : '');
           sRow.innerHTML = `
             <span class="subcat-left">
-              <span class="subcat-icon" style="color:${s.color || cat.color}">${iconSvg(catIconName(s, cat.icon))}</span>
+              <span class="subcat-icon" style="color:${catColor(s, cat.color)}">${iconSvg(catIconName(s, cat.icon))}</span>
               <span class="subcat-label">${catLabel(s)}</span>
             </span>
             <span class="subcat-ratio">${subFound.get(s.id) || 0}/${subCatCounts.get(s.id) || 0}</span>
@@ -472,7 +516,7 @@
     markersLayer.clearLayers();
     toRender.forEach(p => {
       const cat = catById.get(p.subcategory) || catById.get(p.category);
-      const color = p.custom ? '#ff3b8e' : (cat ? cat.color : '#3b82f6');
+      const color = p.custom ? '#ff3b8e' : catColor(cat);
       const icon = p.custom ? 'star' : catIconName(cat);
       const isFound = foundSet.has(p.slug);
       const isSelected = state.selectedPoi && state.selectedPoi.slug === p.slug;
@@ -499,7 +543,7 @@
     const subCat = catById.get(poi.subcategory);
 
     poiPopupBadges.innerHTML = `
-      ${parentCat ? `<span class="poi-badge" style="color:${parentCat.color}">${catLabel(parentCat)}</span>` : ''}
+      ${parentCat ? `<span class="poi-badge" style="color:${catColor(parentCat)}">${catLabel(parentCat)}</span>` : ''}
       ${subCat ? `<span class="poi-badge">${catLabel(subCat)}</span>` : ''}
       ${reg ? `<span class="poi-badge"><span class="region-dot" style="background:${reg.color}"></span>${reg.name}</span>` : ''}
     `;
@@ -527,7 +571,7 @@
     } else {
       foundSet.add(slug);
     }
-    localStorage.setItem(STORAGE_FOUND, JSON.stringify([...foundSet]));
+    saveActiveProgress();
     renderFilters();
     openPoiPopup(state.selectedPoi);
   });
@@ -760,9 +804,161 @@
     });
   });
 
+  // --- Auth & Progress Account ---
+  const authOpenBtn = document.getElementById('authOpenBtn');
+  const authNavLabel = document.getElementById('authNavLabel');
+  const authModalBackdrop = document.getElementById('authModalBackdrop');
+  const authCloseBtn = document.getElementById('authCloseBtn');
+  const authForm = document.getElementById('authForm');
+  const authUsername = document.getElementById('authUsername');
+  const authPassword = document.getElementById('authPassword');
+  const authErrorMsg = document.getElementById('authErrorMsg');
+  const authProfileView = document.getElementById('authProfileView');
+  const authProfileAvatar = document.getElementById('authProfileAvatar');
+  const authProfileName = document.getElementById('authProfileName');
+  const authProfileStats = document.getElementById('authProfileStats');
+  const authProgressFill = document.getElementById('authProgressFill');
+  const authLogoutBtn = document.getElementById('authLogoutBtn');
+  const exportSaveBtn = document.getElementById('exportSaveBtn');
+  const importSaveInput = document.getElementById('importSaveInput');
+
+  async function hashPass(str) {
+    if (window.crypto && window.crypto.subtle) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+    return String(h);
+  }
+
+  function updateAuthUI() {
+    if (!authOpenBtn || !authNavLabel) return;
+    const users = getUsersMap();
+    const profile = activeUser && users[activeUser];
+    if (activeUser && profile) {
+      const displayName = profile.displayName || activeUser;
+      authOpenBtn.classList.add('logged-in');
+      authNavLabel.removeAttribute('data-i18n');
+      authNavLabel.textContent = displayName;
+      if (authForm) authForm.hidden = true;
+      if (authProfileView) authProfileView.hidden = false;
+      if (authProfileAvatar) authProfileAvatar.textContent = displayName.charAt(0).toUpperCase();
+      if (authProfileName) authProfileName.textContent = displayName;
+      const total = DATA.pois.length;
+      const count = foundSet.size;
+      const pct = total ? Math.min(100, Math.round((count / total) * 100)) : 0;
+      if (authProfileStats) authProfileStats.textContent = `${count.toLocaleString('pt-BR')} / ${total.toLocaleString('pt-BR')} ${t('foundLabel')} (${pct}%)`;
+      if (authProgressFill) authProgressFill.style.width = `${pct}%`;
+    } else {
+      authOpenBtn.classList.remove('logged-in');
+      authNavLabel.setAttribute('data-i18n', 'authLoginBtn');
+      authNavLabel.textContent = t('authLoginBtn');
+      if (authForm) authForm.hidden = false;
+      if (authProfileView) authProfileView.hidden = true;
+    }
+  }
+
+  if (authOpenBtn && authModalBackdrop) {
+    authOpenBtn.addEventListener('click', () => {
+      updateAuthUI();
+      if (authErrorMsg) authErrorMsg.hidden = true;
+      authModalBackdrop.hidden = false;
+    });
+    authCloseBtn.addEventListener('click', () => { authModalBackdrop.hidden = true; });
+    authModalBackdrop.addEventListener('click', e => {
+      if (e.target === authModalBackdrop) authModalBackdrop.hidden = true;
+    });
+
+    authForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const username = authUsername.value.trim();
+      const password = authPassword.value;
+      if (!username || !password) return;
+      const key = username.toLowerCase();
+      const users = getUsersMap();
+      const passHash = await hashPass(password);
+
+      if (users[key]) {
+        if (users[key].passHash !== passHash) {
+          authErrorMsg.textContent = t('authWrongPass');
+          authErrorMsg.hidden = false;
+          return;
+        }
+      } else {
+        // Create new profile and carry over any guest marks
+        users[key] = {
+          displayName: username,
+          passHash,
+          found: [...foundSet],
+          customPois
+        };
+        saveUsersMap(users);
+      }
+
+      activeUser = key;
+      localStorage.setItem(STORAGE_SESSION, activeUser);
+      loadActiveProgress();
+      authErrorMsg.hidden = true;
+      authPassword.value = '';
+      updateAuthUI();
+      renderFilters();
+      renderMarkers();
+      if (state.selectedPoi) openPoiPopup(state.selectedPoi);
+    });
+
+    authLogoutBtn.addEventListener('click', () => {
+      activeUser = null;
+      localStorage.removeItem(STORAGE_SESSION);
+      loadActiveProgress();
+      updateAuthUI();
+      renderFilters();
+      renderMarkers();
+      if (state.selectedPoi) openPoiPopup(state.selectedPoi);
+    });
+
+    exportSaveBtn.addEventListener('click', () => {
+      const payload = {
+        user: activeUser || 'guest',
+        exportedAt: new Date().toISOString(),
+        found: [...foundSet],
+        customPois
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gps-leonida-${(activeUser || 'backup').toLowerCase()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    importSaveInput.addEventListener('change', e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (Array.isArray(data.found)) foundSet = new Set(data.found);
+          if (Array.isArray(data.customPois)) customPois = data.customPois;
+          saveActiveProgress();
+          updateAuthUI();
+          renderFilters();
+          renderMarkers();
+        } catch {
+          alert('Arquivo de backup inválido.');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+  }
+
   // --- Init ---
   window.addEventListener('resize', () => map.invalidateSize());
   resetView(false);
+  updateAuthUI();
   applyLanguage(currentLang);
   renderRegionPolygons();
   renderHub();

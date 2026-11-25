@@ -41,7 +41,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Pacifico&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="styles.css?v=20261125c" />
+  <link rel="stylesheet" href="styles.css?v=20261125f" />
 </head>
 <body>
   <!-- Fixed Header -->
@@ -58,6 +58,11 @@
       </ul>
 
       <div class="nav-actions">
+        <button id="authOpenBtn" type="button" class="auth-nav-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span id="authNavLabel" data-i18n="authLoginBtn">Entrar</span>
+        </button>
+
         <button id="themeToggleBtn" type="button" class="icon-btn" title="Mudar tema" aria-label="Mudar tema">
           <svg id="themeIconSun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="4"></circle>
@@ -245,9 +250,58 @@
     </div>
   </footer>
 
+  <!-- Auth / Progress Modal -->
+  <div id="authModalBackdrop" class="auth-modal-backdrop" hidden>
+    <div class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle">
+      <div class="auth-modal-header">
+        <h2 id="authModalTitle" class="night-display auth-modal-title" data-i18n="authModalTitle">Conta de Progresso</h2>
+        <button id="authCloseBtn" type="button" class="icon-btn" aria-label="Fechar">✕</button>
+      </div>
+
+      <!-- Logged Out Form -->
+      <form id="authForm" class="auth-form">
+        <p class="auth-hint" data-i18n="authHint">Entre ou crie um perfil para salvar tudo o que você já marcou como feito em Leonida.</p>
+        <label class="auth-field">
+          <span data-i18n="authUserLabel">Usuário</span>
+          <input id="authUsername" type="text" required minlength="2" maxlength="24" autocomplete="username" placeholder="Ex: MonteiroMV" />
+        </label>
+        <label class="auth-field">
+          <span data-i18n="authPassLabel">Senha</span>
+          <input id="authPassword" type="password" required minlength="3" maxlength="64" autocomplete="current-password" placeholder="••••••" />
+        </label>
+        <p id="authErrorMsg" class="auth-error" hidden></p>
+        <div class="auth-actions-row">
+          <button type="submit" id="authSubmitBtn" class="btn-primary" data-i18n="authSubmitBtn">Entrar / Criar Conta</button>
+        </div>
+      </form>
+
+      <!-- Logged In Profile View -->
+      <div id="authProfileView" class="auth-profile" hidden>
+        <div class="auth-user-card">
+          <div class="auth-user-badge" id="authProfileAvatar">M</div>
+          <div>
+            <div class="auth-user-name" id="authProfileName"></div>
+            <div class="auth-user-stats" id="authProfileStats"></div>
+          </div>
+        </div>
+        <div class="auth-progress-bar">
+          <div id="authProgressFill" class="auth-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="auth-backup-row">
+          <button id="exportSaveBtn" type="button" class="btn-secondary" data-i18n="authExport">Exportar Backup (.json)</button>
+          <label class="btn-secondary auth-import-label">
+            <span data-i18n="authImport">Importar Backup</span>
+            <input id="importSaveInput" type="file" accept="application/json" hidden />
+          </label>
+        </div>
+        <button id="authLogoutBtn" type="button" class="auth-logout-btn" data-i18n="authLogout">Sair da conta</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="map-data-pt.js?v=20261125c"></script>
-  <script src="i18n.js?v=20261125c"></script>
-  <script src="app.js?v=20261125d"></script>
+  <script src="map-data-pt.js?v=20261125f"></script>
+  <script src="i18n.js?v=20261125f"></script>
+  <script src="app.js?v=20261125f"></script>
 </body>
 </html>
