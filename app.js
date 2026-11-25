@@ -151,7 +151,8 @@
     localStorage.setItem(STORAGE_USERS, JSON.stringify(users));
   }
 
-  let activeUser = localStorage.getItem(STORAGE_SESSION) || null;
+  let activeUser = localStorage.getItem(STORAGE_SESSION);
+  if (activeUser) activeUser = activeUser.toLowerCase();
   let foundSet = new Set();
   let customPois = [];
 
@@ -821,6 +822,51 @@
   const authLogoutBtn = document.getElementById('authLogoutBtn');
   const exportSaveBtn = document.getElementById('exportSaveBtn');
   const importSaveInput = document.getElementById('importSaveInput');
+  const authMasterPanel = document.getElementById('authMasterPanel');
+  const authMasterList = document.getElementById('authMasterList');
+
+  function renderMasterPanel() {
+    if (!authMasterPanel || !authMasterList) return;
+    if (activeUser !== 'monteiromv') {
+      authMasterPanel.hidden = true;
+      return;
+    }
+    authMasterPanel.hidden = false;
+    const users = getUsersMap();
+    const keys = Object.keys(users);
+    authMasterList.innerHTML = '';
+
+    if (!keys.length) {
+      authMasterList.innerHTML = '<div style="font-size:0.8rem;color:var(--rs-text-3);">Nenhuma conta criada neste navegador.</div>';
+      return;
+    }
+
+    keys.forEach(k => {
+      const u = users[k];
+      const count = Array.isArray(u.found) ? u.found.length : 0;
+      const customCount = Array.isArray(u.customPois) ? u.customPois.length : 0;
+      const item = document.createElement('div');
+      item.className = 'auth-master-item';
+      item.innerHTML = `
+        <div>
+          <strong style="color:${k === 'monteiromv' ? '#00F0FF' : 'var(--rs-fg)'}">${u.displayName || k}</strong>
+          <div style="font-size:0.74rem;color:var(--rs-text-3);">${count}/${DATA.pois.length} encontrados · ${customCount} pins</div>
+        </div>
+        ${k === 'monteiromv' ? '<span style="font-size:0.7rem;color:#4ade80;font-weight:700;">ADMIN</span>' : `<button type="button" class="auth-master-del" data-del-user="${k}">Remover</button>`}
+      `;
+      authMasterList.appendChild(item);
+    });
+
+    authMasterList.querySelectorAll('[data-del-user]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetKey = btn.getAttribute('data-del-user');
+        const mapUsers = getUsersMap();
+        delete mapUsers[targetKey];
+        saveUsersMap(mapUsers);
+        renderMasterPanel();
+      });
+    });
+  }
 
   async function hashPass(str) {
     if (window.crypto && window.crypto.subtle) {
@@ -850,12 +896,14 @@
       const pct = total ? Math.min(100, Math.round((count / total) * 100)) : 0;
       if (authProfileStats) authProfileStats.textContent = `${count.toLocaleString('pt-BR')} / ${total.toLocaleString('pt-BR')} ${t('foundLabel')} (${pct}%)`;
       if (authProgressFill) authProgressFill.style.width = `${pct}%`;
+      renderMasterPanel();
     } else {
       authOpenBtn.classList.remove('logged-in');
       authNavLabel.setAttribute('data-i18n', 'authLoginBtn');
       authNavLabel.textContent = t('authLoginBtn');
       if (authForm) authForm.hidden = false;
       if (authProfileView) authProfileView.hidden = true;
+      if (authMasterPanel) authMasterPanel.hidden = true;
     }
   }
 
@@ -886,13 +934,18 @@
           return;
         }
       } else {
-        // Create new profile and carry over any guest marks
+        // Create isolated profile (only import guest marks if this is the first account on the device)
+        const isFirstAccount = Object.keys(users).length === 0;
         users[key] = {
           displayName: username,
           passHash,
-          found: [...foundSet],
-          customPois
+          found: isFirstAccount ? [...foundSet] : [],
+          customPois: isFirstAccount ? customPois : []
         };
+        if (isFirstAccount) {
+          localStorage.removeItem(STORAGE_FOUND);
+          localStorage.removeItem(STORAGE_CUSTOM);
+        }
         saveUsersMap(users);
       }
 

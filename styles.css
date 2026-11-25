@@ -1513,3 +1513,72 @@ html.light .auth-field input {
 .auth-logout-btn:hover {
   background: rgba(251, 113, 133, 0.24);
 }
+
+/* Master Admin Panel inside Account Modal */
+.auth-master-panel {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rs-line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-master-panel[hidden] {
+  display: none;
+}
+
+.auth-master-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rs-fg);
+}
+
+.auth-master-badge {
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #FF2A85, #FF7A00);
+  color: #fff;
+  letter-spacing: 0.08em;
+}
+
+.auth-master-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.auth-master-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--rs-line);
+  font-size: 0.82rem;
+}
+
+.auth-master-del {
+  border: 0;
+  background: rgba(251, 113, 133, 0.16);
+  color: #fda4af;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.auth-master-del:hover {
+  background: rgba(251, 113, 133, 0.32);
+}
