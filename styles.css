@@ -1624,3 +1624,8 @@ html.light .auth-field input {
   color: var(--rs-cyan);
   letter-spacing: 0.06em;
 }
+
+.auth-form[hidden],
+.auth-profile[hidden] {
+  display: none !important;
+}

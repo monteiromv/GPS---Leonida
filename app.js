@@ -978,6 +978,7 @@
       localStorage.setItem(STORAGE_SESSION, activeUser);
       loadActiveProgress();
       authErrorMsg.hidden = true;
+      authUsername.value = '';
       authPassword.value = '';
       updateAuthUI();
       renderFilters();
@@ -988,6 +989,10 @@
     authLogoutBtn.addEventListener('click', () => {
       activeUser = null;
       localStorage.removeItem(STORAGE_SESSION);
+      localStorage.removeItem(STORAGE_FOUND);
+      localStorage.removeItem(STORAGE_CUSTOM);
+      if (authUsername) authUsername.value = '';
+      if (authPassword) authPassword.value = '';
       loadActiveProgress();
       updateAuthUI();
       renderFilters();
