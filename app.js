@@ -84,6 +84,7 @@
 
   const state = {
     activeSubcategories: new Set(),
+    collapsedCategories: new Set(),
     activeRegion: null,
     hideFound: false,
     showBorders: true,
@@ -207,25 +208,67 @@
   // --- Filter Sidebar ---
   function renderFilters() {
     categoryGrid.innerHTML = '';
+
+    // Compute found counts per category & subcategory
+    const catFound = new Map();
+    const subFound = new Map();
+    DATA.pois.forEach(p => {
+      if (foundSet.has(p.slug)) {
+        catFound.set(p.category, (catFound.get(p.category) || 0) + 1);
+        subFound.set(p.subcategory, (subFound.get(p.subcategory) || 0) + 1);
+      }
+    });
+
     parentCategories.forEach(cat => {
       const subs = subCategories.filter(s => (subCatCounts.get(s.id) || 0) > 0 && s.parent === cat.id);
       const activeCount = subs.filter(s => state.activeSubcategories.has(s.id)).length;
       const allSelected = subs.length > 0 && activeCount === subs.length;
+      const isPartial = activeCount > 0 && activeCount < subs.length;
+      const isCollapsed = state.collapsedCategories.has(cat.id);
 
       const group = document.createElement('div');
-      group.className = 'cat-group' + (activeCount > 0 ? ' has-active' : '');
+      group.className = 'cat-group'
+        + (activeCount > 0 ? ' has-active' : '')
+        + (isCollapsed ? ' is-collapsed' : '');
 
-      const headBtn = document.createElement('button');
-      headBtn.type = 'button';
-      headBtn.className = 'cat-head-btn' + (activeCount === 0 ? ' is-off' : '');
-      headBtn.innerHTML = `
-        <span class="cat-icon-badge" style="color:${cat.color}">
-          ${iconSvg(cat.icon)}
-        </span>
+      const headRow = document.createElement('div');
+      headRow.className = 'cat-head-row';
+
+      const accBtn = document.createElement('button');
+      accBtn.type = 'button';
+      accBtn.className = 'cat-accordion-btn';
+      accBtn.innerHTML = `
+        <svg class="cat-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
         <span class="cat-name">${catLabel(cat)}</span>
-        <span class="cat-count">${catCounts.get(cat.id) || 0}</span>
       `;
-      headBtn.addEventListener('click', () => {
+      accBtn.addEventListener('click', () => {
+        if (state.collapsedCategories.has(cat.id)) {
+          state.collapsedCategories.delete(cat.id);
+        } else {
+          state.collapsedCategories.add(cat.id);
+        }
+        renderFilters();
+      });
+
+      const headRight = document.createElement('div');
+      headRight.className = 'cat-head-right';
+
+      const countSpan = document.createElement('span');
+      countSpan.className = 'cat-count';
+      countSpan.textContent = `${catFound.get(cat.id) || 0}/${catCounts.get(cat.id) || 0}`;
+
+      const checkBtn = document.createElement('button');
+      checkBtn.type = 'button';
+      checkBtn.className = 'cat-checkbox'
+        + (allSelected ? ' checked' : '')
+        + (isPartial ? ' partial' : '');
+      checkBtn.setAttribute('aria-label', catLabel(cat));
+      if (allSelected) {
+        checkBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+      } else if (isPartial) {
+        checkBtn.innerHTML = '<svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+      }
+      checkBtn.addEventListener('click', () => {
         if (allSelected || activeCount > 0) {
           subs.forEach(s => state.activeSubcategories.delete(s.id));
         } else {
@@ -234,28 +277,29 @@
         renderFilters();
         renderMarkers();
       });
-      group.appendChild(headBtn);
+
+      headRight.appendChild(countSpan);
+      headRight.appendChild(checkBtn);
+      headRow.appendChild(accBtn);
+      headRow.appendChild(headRight);
+      group.appendChild(headRow);
 
       if (subs.length) {
         const subList = document.createElement('div');
         subList.className = 'cat-sub-list';
-        subs.forEach((s, idx) => {
-          if (idx > 0) {
-            const sep = document.createElement('span');
-            sep.className = 'subcat-sep';
-            sep.textContent = '·';
-            subList.appendChild(sep);
-          }
-          const sBtn = document.createElement('button');
-          sBtn.type = 'button';
+        subs.forEach(s => {
           const isSubOn = state.activeSubcategories.has(s.id);
-          sBtn.className = 'subcat-btn' + (isSubOn ? ' active' : '');
-          if (isSubOn) {
-            sBtn.style.backgroundColor = `${cat.color}33`;
-            sBtn.style.color = '#ffffff';
-          }
-          sBtn.textContent = catLabel(s);
-          sBtn.addEventListener('click', () => {
+          const sRow = document.createElement('button');
+          sRow.type = 'button';
+          sRow.className = 'subcat-row' + (isSubOn ? ' active' : '');
+          sRow.innerHTML = `
+            <span class="subcat-left">
+              <span class="subcat-ring" style="color:${s.color || cat.color}"></span>
+              <span class="subcat-label">${catLabel(s)}</span>
+            </span>
+            <span class="subcat-ratio">${subFound.get(s.id) || 0}/${subCatCounts.get(s.id) || 0}</span>
+          `;
+          sRow.addEventListener('click', () => {
             if (state.activeSubcategories.has(s.id)) {
               state.activeSubcategories.delete(s.id);
             } else {
@@ -264,7 +308,7 @@
             renderFilters();
             renderMarkers();
           });
-          subList.appendChild(sBtn);
+          subList.appendChild(sRow);
         });
         group.appendChild(subList);
       }
@@ -427,6 +471,7 @@
       foundSet.add(slug);
     }
     localStorage.setItem(STORAGE_FOUND, JSON.stringify([...foundSet]));
+    renderFilters();
     openPoiPopup(state.selectedPoi);
   });
 
