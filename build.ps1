@@ -36,7 +36,8 @@ $html = Get-Content -Raw -Encoding UTF8 (Join-Path $dist "index.html")
 $refs = [regex]::Matches($html, '(?:src|href)="([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
 foreach ($ref in $refs) {
   if ($ref -match '^(https?:|#|mailto:)') { continue }
-  $target = Join-Path $dist ($ref -replace '/', '\')
+  $cleanRef = ($ref -split '\?')[0]
+  $target = Join-Path $dist ($cleanRef -replace '/', '\')
   if (-not (Test-Path $target)) {
     throw "Broken local reference in index.html: $ref"
   }
